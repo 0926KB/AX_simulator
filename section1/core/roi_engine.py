@@ -112,6 +112,57 @@ def linear_projection(
     return pd.DataFrame(rows)
 
 
+def compute_internal_roi_with_cascade(
+    dept: dict,
+    alpha: float,
+    cascade_result: dict | None = None,
+    phi: float = 1.0,
+) -> dict:
+    """
+    기존 compute_internal_roi()에 연쇄 효과 추가 반영.
+
+    cascade_result가 None이면 기존 방식과 동일 (하위 호환).
+
+    Args:
+        dept:           부서 딕셔너리
+        alpha:          자동화율
+        cascade_result: compute_cascade_effects() 출력 중 해당 부서 항목
+        phi:            AI 생산성 배수
+
+    Returns:
+        compute_internal_roi() 결과 + cascade 관련 필드
+    """
+    base = compute_internal_roi(dept, alpha, phi)
+
+    if cascade_result is None:
+        return {**base, "cascade_applied": False}
+
+    cascade_labor   = cascade_result.get("net_labor_cost_change", 0.0)
+    cascade_hdcount = cascade_result.get("cascade_change", 0.0)
+
+    # 연쇄 효과로 인한 순 절감 조정
+    # cascade_labor: 양수 = 추가 인원(비용 증가), 음수 = 추가 절감
+    adjusted_saving = base["total_saving_annual"] - cascade_labor
+
+    # cascade 적용 NPV 재계산
+    capex         = base["capex"]
+    opex          = base["annual_opex"]
+    discount_rate = 0.10
+    net_annual_c  = adjusted_saving - opex
+    npv_cascade   = sum(
+        net_annual_c / (1 + discount_rate) ** t for t in range(1, 6)
+    ) - capex
+
+    return {
+        **base,
+        "cascade_headcount_change":   round(cascade_hdcount, 2),
+        "cascade_labor_impact":       round(cascade_labor, 3),
+        "total_saving_with_cascade":  round(adjusted_saving, 3),
+        "npv_5yr_with_cascade":       round(npv_cascade, 3),
+        "cascade_applied":            True,
+    }
+
+
 def priority_matrix(dept_roi_list: list[dict]) -> list[dict]:
     """
     부서별 우선순위 매트릭스 분류
