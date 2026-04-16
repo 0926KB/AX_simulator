@@ -10,3 +10,5 @@ python-dotenv>=1.0.0
 yfinance>=0.2.36
 pytrends>=4.9.2
 fpdf2>=2.7.0
+OpenDartReader>=0.7.0
+anthropic>=0.30.0
